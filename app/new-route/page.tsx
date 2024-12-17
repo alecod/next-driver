@@ -1,6 +1,76 @@
-import React from 'react'
+import { NewRouteForm } from "./new-route-form";
 
-function Page() {
+export async function searchDirections(source: string, destination: string) {
+  const [sourceResponse, destinationResponse] = await Promise.all([
+    fetch(`http://localhost:3000/places?text=${source}`, {
+      cache: "force-cache",
+      next: {
+        revalidate: 1 * 60 * 60 * 24, // 1 day
+      },
+    }),
+    fetch(`http://localhost:3000/places?text=${destination}`, {
+      cache: "force-cache",
+      next: {
+        revalidate: 1 * 60 * 60 * 24, // 1 day
+      },
+    }),
+  ]);
+
+  if (!sourceResponse.ok || !destinationResponse.ok) {
+    throw new Error(`Error fetching data`);
+  }
+
+  const [sourceData, destinationData] = await Promise.all([
+    sourceResponse.json(),
+    destinationResponse.json(),
+  ]);
+
+  const placeSourceId = sourceData.candidates[0].place_id;
+  const placeDestinationId = destinationData.candidates[0].place_id;
+
+  const directionsResponse = await fetch(
+    `http://localhost:3000/directions?originId=${placeSourceId}&destinationId=${placeDestinationId}`,
+    {
+      cache: "force-cache",
+      next: {
+        revalidate: 1 * 60 * 60 * 24, // 1 day
+      },
+    }
+  );
+
+  if (!directionsResponse.ok) {
+    throw new Error(`Error fetching directions`);
+  }
+
+  const directionsData = await directionsResponse.json();
+
+  return {
+    directionsData,
+    placeSourceId,
+    placeDestinationId,
+  };
+}
+
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ source: string; destination: string }>;
+}) {
+  const { source, destination } = await searchParams;
+
+  const result =
+    source && destination ? await searchDirections(source, destination) : null;
+
+  let directionsData = null;
+  let placeSourceId = null;
+  let placeDestinationId = null;
+
+  if (result) {
+    directionsData = result.directionsData;
+    placeSourceId = result.placeSourceId;
+    placeDestinationId = result.placeDestinationId;
+  }
+
   return (
     <div className="flex flex-1 w-full h-full">
       <div className="w-1/3 p-4 h-full">
@@ -12,7 +82,6 @@ function Page() {
               name="source"
               type="search"
               placeholder=""
-   
               className="block rounded-t-lg px-2.5 pb-2.5 pt-5 w-full text-sm text-contrast bg-default border-0 border-b-2 border-contrast appearance-none focus:outline-none focus:ring-0 focus:border-primary peer"
             />
             <label
@@ -28,7 +97,6 @@ function Page() {
               name="destination"
               type="search"
               placeholder=""
-         
               className="block rounded-t-lg px-2.5 pb-2.5 pt-5 w-full text-sm text-contrast bg-default border-0 border-b-2 border-contrast appearance-none focus:outline-none focus:ring-0 focus:border-primary peer"
             />
             <label
@@ -45,31 +113,50 @@ function Page() {
             Pesquisar
           </button>
         </form>
-
-        <div className="mt-4 p-4 border rounded text-contrast">
+        {directionsData && (
+          <div className="mt-4 p-4 border rounded text-contrast">
             <ul>
               <li className="mb-2">
                 <strong>Origem:</strong>{" "}
-                
+                {directionsData.routes[0].legs[0].start_address}
               </li>
               <li className="mb-2">
                 <strong>Destino:</strong>{" "}
-               
+                {directionsData.routes[0].legs[0].end_address}
               </li>
               <li className="mb-2">
                 <strong>Distância:</strong>{" "}
-                
+                {directionsData.routes[0].legs[0].distance.text}
               </li>
               <li className="mb-2">
                 <strong>Duração:</strong>{" "}
-               
+                {directionsData.routes[0].legs[0].duration.text}
               </li>
             </ul>
-     </div>
-      </div>
-   
-    </div>
-  )
-}
 
-export default Page
+            <NewRouteForm >
+              {placeSourceId && (
+                <input type="hidden" name="sourceId" value={placeSourceId} />
+              )}
+
+              {placeDestinationId && (
+                <input
+                  type="hidden"
+                  name="destinationId"
+                  value={placeDestinationId}
+                />
+              )}
+
+              <button
+                type="submit"
+                className="bg-main text-primary font-bold p-2 rounded mt--4"
+              >
+                Adicionar Rota
+              </button>
+            </NewRouteForm>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
