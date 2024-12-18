@@ -9,7 +9,7 @@ export function useMap(containerRef: React.RefObject<HTMLDivElement>) {
   useEffect(() => {
     (async () => {
       const loader = new Loader({
-        apiKey: 'AIzaSyBWIP1Ni3LJmzUWh8emnug2ys2mrT7gw2w' as string,
+        apiKey: '' as string,
         libraries: ["routes", "geometry", "marker"],
       });
       const [, , , position] = await Promise.all([
